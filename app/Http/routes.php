@@ -23,7 +23,9 @@ Route::post('updateMedia','mediaController@updateMedia');
 
 //Rekognition
 Route::post('detectModeration','mediaController@detectModeration');
-Route::get('recognizeCelebrity','mediaController@recognizeCelebrity');
+Route::post('recognizeCelebrity','mediaController@recognizeCelebrity');
+Route::post('getTags','mediaController@getTags');
+
 
 
 

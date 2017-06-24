@@ -23,7 +23,8 @@ class Media extends Authenticatable {
         'shares', 
         'favorites', 
         'is_favorite',
-        'is_obscene'
+        'is_obscene',
+        'celebrity_name'
     ];
     public $timestamps = false;
 }

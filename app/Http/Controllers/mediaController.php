@@ -11,7 +11,8 @@ use AWS;
 use App\Models\Media;
 use App\Models\PhotoGrapher;
 use App\Models\Location;
-
+use App\Models\Tag;
+use Aws\Rekognition\Exception\RekognitionException;
 
 class mediaController extends Controller
 {
@@ -31,7 +32,7 @@ class mediaController extends Controller
 
             if(isset($result) && $result['@metadata']['statusCode'] == 200){
 
-                Media::Create([
+               $media = Media::Create([
                     'photo_grapher_id' => $request->has('photo_grapher_id') ? $request->input('photo_grapher_id') : 1,
                     'file' => $file_name, 
                     'type' => 1, 
@@ -43,23 +44,31 @@ class mediaController extends Controller
                     'location_id' => $request->has('location_id') ? $request->input('location_id') : null,
                 ]);
 
+                $this->detectModeration($media->id);
+                $this->recognizeCelebrity($media->id);
+
                 return json_encode([
                 'code' => 200,
                 'message' => 'Done',
                 'file_name' => $file_name,
                 'file_path' => $result['ObjectURL']
                 ]);
-
             }
 
+        }catch(RekognitionException $e){
+            return json_encode([
+                'code' => 400,
+                'message' => 'Ooops something went wrong....',
+                'exception' => $e->getAwsErrorMessage()
+            ]);
         }catch(\Exception $e){
             return json_encode([
                 'code' => 400,
-                'message' => 'Ooops something went wrong....'
+                'message' => 'Ooops something went wrong....',
+                'exception' => $e->getMessage()
             ]);
         }
     }
-
 
     public function getMedia(Request $request){
         try{
@@ -179,24 +188,35 @@ class mediaController extends Controller
         
     }
 
-    public function detectModeration(Request $request){
+    public function detectModeration($media_id){
         try{
-            $file_name = $request->input('name'); 
+            $media = Media::Where(['id' => $media_id]);
+            if(!$media->exists()){
+                return false;
+            }
             $client = AWS::createClient('rekognition');
             $result = $client->detectModerationLabels([
                 'Image' => [
                     'S3Object' => [
                         'Bucket' => 'photofame',
-                        'Name' => $file_name,
+                        'Name' => $media->first()->file,
                     ],
                 ],
                 'MinConfidence' => 70
             ]);
-
             if(isset($result) && is_array($result['ModerationLabels']) && count($result['ModerationLabels']) > 0){
-                return 1;
+                $media->update([
+                    'is_obscene' => 1
+                ]);
+                return true;
             }
-            return 0;
+            return false;
+        }catch(RekognitionException $e){
+            return json_encode([
+                'code' => 400,
+                'message' => 'Ooops something went wrong....',
+                'exception' => $e->getAwsErrorMessage()
+            ]);
         }catch(\Exception $e){
             return json_encode([
                 'code' => 400,
@@ -206,35 +226,84 @@ class mediaController extends Controller
         }
     }
 
-    public function recognizeCelebrity(Request $request){
-        $file_name = $request->input('name'); 
-        $client = AWS::createClient('rekognition');
-        $result = $client->recognizeCelebrities([
-            'Image' => [
-                'S3Object' => [
-                    'Bucket' => 'photofame',
-                    'Name' => $file_name,
+    public function recognizeCelebrity($media_id){
+        try{
+            $media = Media::Where(['id' => $media_id]);
+            if(!$media->exists()){
+                return false;
+            }
+            $client = AWS::createClient('rekognition');
+            $result = $client->recognizeCelebrities([
+                'Image' => [
+                    'S3Object' => [
+                        'Bucket' => 'photofame',
+                        'Name' => $media->first()->file,
+                    ]
                 ]
-            ],
-            'MinConfidence' => 70
-        ]);
-        dd($result);
+            ]);
+            $celebrity_name = '';
+            if(isset($result) && is_array($result['CelebrityFaces']) && count($result['CelebrityFaces']) > 0){
+                $celebrity_name = $result['CelebrityFaces'][0]['Name'];
+                $media->update([
+                    'celebrity_name' => $celebrity_name
+                ]);
+                Tag::Create([
+                    'media_id' => $media_id,
+                    'photo_grapher_id' => $media->first()->photo_grapher_id,
+                    'name' => $celebrity_name
+                ]);
+                return true;
+            }
+            return false;
+        }catch(RekognitionException $e){
+            return json_encode([
+                'code' => 400,
+                'message' => 'Ooops something went wrong....',
+                'exception' => $e->getAwsErrorMessage()
+            ]);
+        }catch(\Exception $e){
+            return json_encode([
+                'code' => 400,
+                'message' => 'Ooops something went wrong....',
+                'exception' => $e->getMessage()
+            ]);
+        }
     }
 
-    public function getTags($image_name){
+    public function getTags($media_id){
         try{
+            if(!is_numeric($media_id)) return;
+            $media = Media::Where(['id' => $media_id]);
+            if(!$media->exists()) return;
             $client = AWS::createClient('rekognition');
             $result = $client->detectLabels([
                 'Image' => [
                     'S3Object' => [
                         'Bucket' => 'photofame',
-                        'Name' => '1.jpg',
+                        'Name' => $media->first()->file,
                     ],
                 ],
-                'MaxLabels' => 10,
-                'MinConfidence' => 80,
+                'MaxLabels' => 30,
+                'MinConfidence' => 70,
             ]);
-            dd($result);
+
+            if(isset($result) && is_array($result['Labels']) && count($result['Labels']) > 0){
+                foreach($result['Labels'] as $tag){
+                    Tag::Create([
+                        'name' => $tag['Name'],
+                        'media_id' => $media->first()->id,
+                        'photo_grapher_id' => $media->first()->photo_grapher_id
+                    ]);
+                }
+                return;
+            }
+            return;
+        }catch(RekognitionException $e){
+            return json_encode([
+                'code' => 400,
+                'message' => 'Ooops something went wrong....',
+                'exception' => $e->getAwsErrorMessage()
+            ]);
         }catch(\Exception $e){
             return json_encode([
                 'code' => 400,
@@ -243,6 +312,5 @@ class mediaController extends Controller
             ]);
         }
     }
-
     
 }

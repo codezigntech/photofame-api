@@ -17,6 +17,7 @@ class VerifyCsrfToken extends BaseVerifier
         'getMediaDetails',
         'updateMedia',
         'detectModeration',
-        'recognizeCelebrity'
+        'recognizeCelebrity',
+        'getTags'
     ];
 }
