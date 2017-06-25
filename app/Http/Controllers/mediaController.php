@@ -21,7 +21,7 @@ class mediaController extends Controller
         try{
             $uniqe_recg_id = uniqid();
             $file = $request->file('file');
-            $file_ext = $file->getClientOriginalExtension() ? $file->getClientOriginalExtension() : 'png';
+            $file_ext = 'png';//$file->getClientOriginalExtension() ? $file->getClientOriginalExtension() : 'png';
             $file_name = $uniqe_recg_id.'.'.$file_ext;
             $s3 = AWS::createClient('s3');
             $result = $s3->putObject(array(
@@ -76,7 +76,8 @@ class mediaController extends Controller
     public function getMedia(Request $request){
         try{
             $offset = $request->has('offset') ? $request->input('offset') : 0;
-            $media = Media::Where(['photo_grapher_id' => $request->input('photo_grapher_id')])->offset($offset)->limit(50)->get([
+            //->offset($offset)->limit(50)
+            $media = Media::Where(['photo_grapher_id' => $request->input('photo_grapher_id')])->orderByRaw('RAND()')->get([
                 'id',
                 'file',
                 'width',
@@ -337,7 +338,7 @@ class mediaController extends Controller
             $media = Media::Where(['id' => $media_id]);
             if($media->exists()){
                 $media->increment('views');
-                $tags = $details = array();
+                $tags = $details = $final_tags = array();
                 $details = $media->first([
                     'id',
                     'photo_grapher_id',
