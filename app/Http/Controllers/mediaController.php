@@ -46,13 +46,16 @@ class mediaController extends Controller
 
                 $this->detectModeration($media->id);
                 $this->recognizeCelebrity($media->id);
-
+                $this->getTags($media->id);
+                return $this->getMediaDetailsById($media->id);
+                /*
                 return json_encode([
                 'code' => 200,
                 'message' => 'Done',
                 'file_name' => $file_name,
                 'file_path' => $result['ObjectURL']
                 ]);
+                */
             }
 
         }catch(RekognitionException $e){
@@ -101,27 +104,42 @@ class mediaController extends Controller
             $media = Media::Where(['id' => $request->input('media_id')]);
             if($media->exists()){
                 $media->increment('views');
-                $result = $media->first([
+                $tags = $details = array();
+                $details = $media->first([
                     'id',
-                    'file',
-                    'thumb',
-                    'width',
-                    'height',
-                    'primary_colour',
-                    'background_colour',
+                    'photo_grapher_id',
+                    'file', 
+                    'thumb', 
+                    'type', 
+                    'width', 
+                    'height', 
+                    'colour_string', 
+                    'primary_colour', 
+                    'background_colour', 
+                    'location_id', 
                     'views', 
                     'downloads', 
                     'shares', 
                     'favorites', 
                     'is_favorite',
                     'is_obscene',
-                    'location_id',
+                    'celebrity_name'
                 ]);
+                $tags = Tag::Where(['media_id' => $request->input('media_id')]);
+                if($tags->exists()){
+                    $tags = $tags->get(['name'])->toArray();
+                    foreach($tags as $each_tag){
+                        $final_tags[] = $each_tag['name']; 
+                    }
+                }
 
                 return json_encode([
                     'code' => 200,
                     'message' => 'Done',
-                    'result' => $result->toArray()
+                    'result' => [
+                        'details' => $details->toArray(),
+                        'tags' => $final_tags
+                    ]
                 ]);
 
             }else{
@@ -133,7 +151,8 @@ class mediaController extends Controller
         }catch(\Exception $e){
             return json_encode([
                 'code' => 400,
-                'message' => 'Ooops something went wrong....'
+                'message' => 'Ooops something went wrong....',
+                'exception' => $e->getMessage()
             ]);
         }
 
@@ -311,6 +330,65 @@ class mediaController extends Controller
                 'exception' => $e->getMessage()
             ]);
         }
+    }
+
+    protected function getMediaDetailsById($media_id){
+        try{
+            $media = Media::Where(['id' => $media_id]);
+            if($media->exists()){
+                $media->increment('views');
+                $tags = $details = array();
+                $details = $media->first([
+                    'id',
+                    'photo_grapher_id',
+                    'file', 
+                    'thumb', 
+                    'type', 
+                    'width', 
+                    'height', 
+                    'colour_string', 
+                    'primary_colour', 
+                    'background_colour', 
+                    'location_id', 
+                    'views', 
+                    'downloads', 
+                    'shares', 
+                    'favorites', 
+                    'is_favorite',
+                    'is_obscene',
+                    'celebrity_name'
+                ]);
+                $tags = Tag::Where(['media_id' => $media_id]);
+                if($tags->exists()){
+                    $tags = $tags->get(['name'])->toArray();
+                    foreach($tags as $each_tag){
+                        $final_tags[] = $each_tag['name']; 
+                    }
+                }
+
+                return json_encode([
+                    'code' => 200,
+                    'message' => 'Done',
+                    'result' => [
+                        'details' => $details->toArray(),
+                        'tags' => $final_tags
+                    ]
+                ]);
+
+            }else{
+                return json_encode([
+                    'code' => 400,
+                    'message' => 'Ooooops.....no media file found.'
+                ]);
+            }
+        }catch(\Exception $e){
+            return json_encode([
+                'code' => 400,
+                'message' => 'Ooops something went wrong....',
+                'exception' => $e->getMessage()
+            ]);
+        }
+
     }
     
 }
